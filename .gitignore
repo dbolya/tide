@@ -1,0 +1,8 @@
+__pycache__/
+.vscode/
+build/
+dist/
+*.egg-info
+.ipynb*
+examples/mask_rcnn_mask.json
+examples/mask_rcnn_bbox.json
