@@ -10,13 +10,13 @@
 
 An easy-to-use, general toolbox to compute and evaluate the effect of object detection and instance segmentation on overall performance. This is the code for our paper: [TIDE: A General Toolbox for Identifying Object Detection Errors](https://dbolya.github.io/tide/paper.pdf).
 
-Check out our ECCV 2020 short video for an explanation of what TIDE:
+Check out our ECCV 2020 short video for an explanation of what TIDE can do:
 
-[![TIDE Introduction](https://img.youtube.com/vi/Pz4uggQzJXU/0.jpg)](https://www.youtube.com/watch?v=Pz4uggQzJXU)
+<iframe width="560" height="315" src="https://www.youtube.com/embed/Pz4uggQzJXU" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 # Installation
 
-TIDE is available as a python package for python 3.6+ as "tidecv". To install, simply install it with pip:
+TIDE is available as a python package for python 3.6+ as [tidecv](https://pypi.org/project/tidecv/). To install, simply install it with pip:
 ```shell
 pip3 install tidecv
 ```
