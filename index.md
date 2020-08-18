@@ -1,12 +1,4 @@
 # A General **T**oolbox for **I**dentifying Object **D**etection **E**rrors
-```
-████████╗██╗██████╗ ███████╗
-╚══██╔══╝██║██╔══██╗██╔════╝
-   ██║   ██║██║  ██║█████╗  
-   ██║   ██║██║  ██║██╔══╝  
-   ██║   ██║██████╔╝███████╗
-   ╚═╝   ╚═╝╚═════╝ ╚══════╝                            
-```
 
 An easy-to-use, general toolbox to compute and evaluate the effect of object detection and instance segmentation on overall performance. This is the code for our paper: [TIDE: A General Toolbox for Identifying Object Detection Errors](https://dbolya.github.io/tide/paper.pdf).
 
