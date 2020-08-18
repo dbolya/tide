@@ -10,7 +10,7 @@
 
 An easy-to-use, general toolbox to compute and evaluate the effect of object detection and instance segmentation on overall performance. This is the code for our paper: [TIDE: A General Toolbox for Identifying Object Detection Errors](https://dbolya.github.io/tide/paper.pdf).
 
-Check out our ECCV 2020 short video for an explanation of what TIDE:
+Check out our ECCV 2020 short video for an explanation of what TIDE can do:
 
 [![TIDE Introduction](https://img.youtube.com/vi/Pz4uggQzJXU/0.jpg)](https://www.youtube.com/watch?v=Pz4uggQzJXU)
 
