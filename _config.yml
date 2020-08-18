@@ -1,0 +1,8 @@
+title: TIDE
+description: A General Toolbox for Identifying Object Detection Errors
+google_analytics: 
+show_downloads: true
+theme: jekyll-theme-cayman
+
+gems:
+  - jekyll-mentions
