@@ -60,7 +60,7 @@ And a summary plot for your model's errors:
 
 ## Jupyter Notebook
 
-Check out the [example notebook](https://github.com/dbolya/tide/blob/master/examples/coco_example.ipynb) for more details.
+Check out the [example notebook](https://github.com/dbolya/tide/blob/master/examples/coco_instance_segmentation.ipynb) for more details.
 
 
 # Datasets
