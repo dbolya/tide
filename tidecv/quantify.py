@@ -1,23 +1,24 @@
-from .data import Data
-from .ap import ClassedAPDataObject
-from .errors.main_errors import (
-    ClassError,
-    BoxError,
-    OtherError,
-    DuplicateError,
-    BackgroundError,
-    MissedError,
-    FalsePositiveError,
-    FalseNegativeError
-)
-from .errors.qualifiers import Qualifier
+import os
+from collections import OrderedDict, defaultdict
+
+import numpy as np
+from pycocotools import mask as mask_utils
+
 from . import functions as f
 from . import plotting as P
-
-from pycocotools import mask as mask_utils
-from collections import defaultdict, OrderedDict
-import numpy as np
-import os
+from .ap import ClassedAPDataObject
+from .data import Data
+from .errors.main_errors import (
+    BackgroundError,
+    BoxError,
+    ClassError,
+    DuplicateError,
+    FalseNegativeError,
+    FalsePositiveError,
+    MissedError,
+    OtherError
+)
+from .errors.qualifiers import Qualifier
 
 
 class TIDEExample:

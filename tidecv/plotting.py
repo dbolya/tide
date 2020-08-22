@@ -1,24 +1,24 @@
-from collections import OrderedDict
 import os
+from collections import OrderedDict
 
 import cv2
-import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from .errors.main_errors import (
-    ClassError,
-    BoxError,
-    OtherError,
-    DuplicateError,
-    BackgroundError,
-    MissedError,
-    FalsePositiveError,
-    FalseNegativeError
-)
 from .datasets import get_tide_path
+from .errors.main_errors import (
+    BackgroundError,
+    BoxError,
+    ClassError,
+    DuplicateError,
+    FalseNegativeError,
+    FalsePositiveError,
+    MissedError,
+    OtherError
+)
 
 
 def print_table(rows: list, title: str = None):

@@ -1,14 +1,15 @@
-from .data import Data
-from . import functions as f
-
-import zipfile
-from pathlib import Path
-from appdirs import user_data_dir
-import urllib.request
-from collections import defaultdict
-import shutil
 import json
 import os
+import shutil
+import urllib.request
+import zipfile
+from collections import defaultdict
+from pathlib import Path
+
+from appdirs import user_data_dir
+
+from . import functions as f
+from .data import Data
 
 
 def default_name(path: str) -> str:

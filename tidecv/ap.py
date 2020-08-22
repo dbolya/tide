@@ -1,7 +1,7 @@
-from pycocotools import mask as mask_utils
-
 from collections import defaultdict
+
 import numpy as np
+from pycocotools import mask as mask_utils
 
 from .data import Data
 

@@ -1,6 +1,7 @@
 from typing import Union
 
 import cv2
+
 from .. import functions as f
 
 

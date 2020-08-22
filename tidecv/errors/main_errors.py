@@ -1,4 +1,4 @@
-from .error import Error, BestGTMatch
+from .error import BestGTMatch, Error
 
 
 class ClassError(Error):
