@@ -176,12 +176,24 @@ class Plotter():
 		hbar_im = np.concatenate([np.zeros((vbar_im.shape[0] - hbar_im.shape[0], hbar_im.shape[1], 3)) + 255, hbar_im],
 								axis=0)
 		summary_im = np.concatenate([hbar_im, vbar_im], axis=1)
-
-		lpad, rpad = int(np.ceil((pie_im.shape[1] - summary_im.shape[1])/2)), \
+		
+		# pad summary_im
+		if summary_im.shape[1]<pie_im.shape[1]:
+			lpad, rpad = int(np.ceil((pie_im.shape[1] - summary_im.shape[1])/2)), \
 					int(np.floor((pie_im.shape[1] - summary_im.shape[1])/2))
-		summary_im = np.concatenate([np.zeros((summary_im.shape[0], lpad, 3)) + 255,
+			summary_im = np.concatenate([np.zeros((summary_im.shape[0], lpad, 3)) + 255,
 									summary_im,
 									np.zeros((summary_im.shape[0], rpad, 3)) + 255], axis=1)
+			
+		# pad pie_im
+		else:
+			lpad, rpad = int(np.ceil((summary_im.shape[1] - pie_im.shape[1])/2)), \
+					int(np.floor((summary_im.shape[1] - pie_im.shape[1])/2))
+			pie_im = np.concatenate([np.zeros((pie_im.shape[0], lpad, 3)) + 255,
+									pie_im,
+									np.zeros((pie_im.shape[0], rpad, 3)) + 255], axis=1)
+		
+			
 		summary_im = np.concatenate([pie_im, summary_im], axis=0)
 		
 		if out_dir is None:
