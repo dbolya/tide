@@ -148,7 +148,7 @@ def LVIS(path:str=None, name:str=None, version_str:str='v1', force_download:bool
 			'https://s3-us-west-2.amazonaws.com/dl.fbaipublicfiles.com/LVIS/lvis_{}_val.json.zip'.format(version_str),
 			force_download)
 
-		path = os.path.join('lvis_{}_val.json'.format(version_str))
+		path = os.path.join(path, 'lvis_{}_val.json'.format(version_str))
 		
 	
 	if name is None: name = default_name(path)
