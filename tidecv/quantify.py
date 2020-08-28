@@ -401,6 +401,15 @@ class TIDERun:
 
 
 class TIDE:
+	"""
+	████████╗██╗██████╗ ███████╗
+	╚══██╔══╝██║██╔══██╗██╔════╝
+	   ██║   ██║██║  ██║█████╗  
+	   ██║   ██║██║  ██║██╔══╝  
+	   ██║   ██║██████╔╝███████╗
+	   ╚═╝   ╚═╝╚═════╝ ╚══════╝
+   """
+
 
 	# This is just here to define a consistent order of the error types
 	_error_types = [ClassError, BoxError, OtherError, DuplicateError, BackgroundError, MissedError]
