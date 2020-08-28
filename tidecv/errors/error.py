@@ -20,7 +20,9 @@ class Error:
 		""" Returns the original version of this data point. """
 
 		if hasattr(self, 'pred'):
-			return self.pred['class'], (self.pred['score'], False, self.pred['info'])
+			# If an ignored instance is an error, it's not in the data point list, so there's no "unfixed" entry
+			if self.pred['used'] is None: return None
+			else: return self.pred['class'], (self.pred['score'], False, self.pred['info'])
 		else:
 			return None
 	

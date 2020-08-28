@@ -163,8 +163,10 @@ class TIDERun:
 
 			# These classes are ignored for the whole image and not in the ground truth, so
 			# we can safely just remove these detections from the predictions at the start.
-			ignored_classes = self.gt._get_ignored_classes(image)
-			x = [pred for pred in x if pred['class'] not in ignored_classes]
+			# However, since ignored detections are still used for error calculations, we have to keep them.
+			if not self.run_errors:
+				ignored_classes = self.gt._get_ignored_classes(image)
+				x = [pred for pred in x if pred['class'] not in ignored_classes]
 
 			self._eval_image(x, y)
 
@@ -215,16 +217,15 @@ class TIDERun:
 
 		for pred_idx, pred in enumerate(preds):
 
-			# None means that the prediction was ignored
+			pred['info'] = {'iou': pred['iou'], 'used': pred['used']}
+			if pred['used']: pred['info']['matched_with'] = pred['matched_with']
+			
 			if pred['used'] is not None:
-				pred['info'] = {'iou': pred['iou']}
-				if pred['used']:
-					pred['info']['matched_with'] = pred['matched_with']
 				self.ap_data.push(pred['class'], pred['_id'], pred['score'], pred['used'], pred['info'])
 			
 			# ----- ERROR DETECTION ------ #
-			# This prediction is a negative, let's find out why
-			if self.run_errors and pred['used'] == False:
+			# This prediction is a negative (or ignored), let's find out why
+			if self.run_errors and (pred['used'] == False or pred['used'] == None):
 				# Test for BackgroundError
 				if len(ex.gt) == 0: # Note this is ex.gt because it doesn't include ignore annotations
 					# There is no ground truth for this image, so just mark everything as BackgroundError
@@ -272,6 +273,7 @@ class TIDERun:
 					self.false_negatives[truth['class']].append(truth)
 					
 					# The GT was completely missed, no error can correct it
+					# Note: 'usable' is set in error.py
 					if not truth['usable']:
 						self._add_error(MissedError(truth))
 				
