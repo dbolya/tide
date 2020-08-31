@@ -6,3 +6,6 @@ dist/
 .ipynb*
 examples/mask_rcnn_mask.json
 examples/mask_rcnn_bbox.json
+examples/mask_rcnn_lvis.json
+minimal_example.py
+figs/
