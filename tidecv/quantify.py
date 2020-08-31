@@ -444,10 +444,10 @@ class TIDE:
 
 	def evaluate(self, gt:Data, preds:Data, pos_threshold:float=None, background_threshold:float=None,
 					   mode:str=None, name:str=None, use_for_errors:bool=True) -> TIDERun:
-		pos_thresh = self.pos_thresh         if pos_threshold        is None else pos_threshold
-		bg_thresh  = self.bg_thresh          if background_threshold is None else background_threshold
-		mode       = self.mode               if mode                 is None else mode
-		name       = preds.name + "-" + mode if name                 is None else name
+		pos_thresh = self.pos_thresh if pos_threshold        is None else pos_threshold
+		bg_thresh  = self.bg_thresh  if background_threshold is None else background_threshold
+		mode       = self.mode       if mode                 is None else mode
+		name       = preds.name      if name                 is None else name
 
 		run = TIDERun(gt, preds, pos_thresh, bg_thresh, mode, gt.max_dets, use_for_errors)
 
@@ -460,7 +460,7 @@ class TIDE:
 							background_threshold:float=None, mode:str=None, name:str=None) -> dict:
 
 		if pos_threshold is None: pos_threshold = self.pos_thresh
-		if name          is None: name          = preds.name + "-" + (self.mode if mode is None else mode)
+		if name          is None: name          = preds.name
 
 		self.run_thresholds[name] = []
 
