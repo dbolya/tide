@@ -9,7 +9,7 @@ from pycocotools import mask as mask_utils
 from collections import defaultdict, OrderedDict
 import numpy as np
 from typing import Union
-import os
+import os, math
 
 class TIDEExample:
 	""" Computes all the data needed to evaluate a set of predictions and gt for a single image. """
@@ -575,6 +575,17 @@ class TIDE:
 		
 		errors = self.get_all_errors()
 
+		max_main_error = max(sum([list(x.values()) for x in errors['main'].values()], []))
+		max_spec_error = max(sum([list(x.values()) for x in errors['special'].values()], []))
+		dap_granularity = 5 # The max will round up to the nearest unit of this
+
+		# Round the plotter's dAP range up to the nearest granularity units
+		if max_main_error > self.plotter.MAX_MAIN_DELTA_AP:
+			self.plotter.MAX_MAIN_DELTA_AP = math.ceil(max_main_error / dap_granularity) * dap_granularity
+		if max_spec_error > self.plotter.MAX_SPECIAL_DELTA_AP:
+			self.plotter.MAX_SPECIAL_DELTA_AP = math.ceil(max_spec_error / dap_granularity) * dap_granularity
+
+		# Do the plotting now
 		for run_name, run in self.runs.items():
 			self.plotter.make_summary_plot(out_dir, errors, run_name, run.mode, hbar_names=True)
 
