@@ -1,10 +1,10 @@
 # A General **T**oolbox for **I**dentifying Object **D**etection **E**rrors
 
-An easy-to-use, general toolbox to compute and evaluate the effect of object detection and instance segmentation on overall performance. This is the code for our paper: [TIDE: A General Toolbox for Identifying Object Detection Errors](https://dbolya.github.io/tide/paper.pdf).
+An easy-to-use, general toolbox to compute and evaluate the effect of object detection and instance segmentation on overall performance. This is the code for our paper: [TIDE: A General Toolbox for Identifying Object Detection Errors](https://dbolya.github.io/tide/paper.pdf) ([ArXiv](https://arxiv.org/abs/2008.08115)) [ECCV2020 Spotlight].
 
 Check out our ECCV 2020 short video for an explanation of what TIDE can do:
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/Pz4uggQzJXU" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/McYFYU3PXcU" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 # Installation
 
@@ -12,6 +12,8 @@ TIDE is available as a python package for python 3.6+ as [tidecv](https://pypi.o
 ```shell
 pip3 install tidecv
 ```
+
+The current version is v1.0.1 ([changelog](https://github.com/dbolya/tide/blob/master/CHANGELOG.md)).
 
 # Usage
 TIDE is meant as a drop-in replacement for the [COCO Evaluation toolkit](https://github.com/cocodataset/cocoapi), and getting started is easy:
@@ -35,7 +37,7 @@ bbox AP @ 50: 61.80
 =============================================================
   Type      Cls      Loc     Both     Dupe      Bkg     Miss
 -------------------------------------------------------------
-   dAP     3.33     6.30     1.18     0.19     3.96     7.99
+   dAP     3.40     6.65     1.18     0.19     3.96     7.53
 =============================================================
 
         Special Error
