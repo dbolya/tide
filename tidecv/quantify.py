@@ -233,15 +233,15 @@ class TIDERun:
 					continue
 
 				# Test for BoxError
-				idx = ex.gt_cls_iou[pred_idx, :].argmax()
-				if self.bg_thresh <= ex.gt_cls_iou[pred_idx, idx] <= self.pos_thresh:
+				idx = ex.gt_unused_cls[pred_idx, :].argmax()
+				if self.bg_thresh <= ex.gt_unused_cls[pred_idx, idx] <= self.pos_thresh:
 					# This detection would have been positive if it had higher IoU with this GT
 					self._add_error(BoxError(pred, ex.gt[idx], ex))
 					continue
 
 				# Test for ClassError
-				idx = ex.gt_noncls_iou[pred_idx, :].argmax()
-				if ex.gt_noncls_iou[pred_idx, idx] >= self.pos_thresh:
+				idx = ex.gt_unused_noncls[pred_idx, :].argmax()
+				if ex.gt_unused_noncls[pred_idx, idx] >= self.pos_thresh:
 					# This detection would have been a positive if it was the correct class
 					self._add_error(ClassError(pred, ex.gt[idx], ex))
 					continue
@@ -255,8 +255,8 @@ class TIDERun:
 					continue
 					
 				# Test for BackgroundError
-				idx = ex.gt_iou[pred_idx, :].argmax()
-				if ex.gt_iou[pred_idx, idx] <= self.bg_thresh:
+				idx = ex.gt_unused_iou[pred_idx, :].argmax()
+				if ex.gt_unused_iou[pred_idx, idx] <= self.bg_thresh:
 					# This should have been marked as background
 					self._add_error(BackgroundError(pred))
 					continue
