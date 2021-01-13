@@ -87,8 +87,11 @@ def toRLE(mask:object, w:int, h:int):
 	if type(mask) == list:
 		# polygon -- a single object might consist of multiple parts
 		# we merge all parts into one mask rle code
-		rles = maskUtils.frPyObjects(mask, h, w)
-		return maskUtils.merge(rles)
+		if mask:
+			rles = maskUtils.frPyObjects(mask, h, w)
+			return maskUtils.merge(rles)
+		else:
+			return mask
 	elif type(mask['counts']) == list:
 		# uncompressed RLE
 		return maskUtils.frPyObjects(mask, h, w)

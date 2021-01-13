@@ -149,6 +149,9 @@ class ClassedAPDataObject:
 		aps = [x.get_ap() for x in self.objs.values() if not x.is_empty()]
 		return sum(aps) / len(aps)
 
+        def get_per_class_APs(self) -> dict:                                          
+                return {k : v.get_ap() for k, v in self.objs.items()}  
+
 	def get_gt_positives(self) -> dict:
 		return {k: v.num_gt_positives for k, v in self.objs.items()}
 
