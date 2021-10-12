@@ -1,7 +1,9 @@
+from io import FileIO
 import matplotlib.pyplot as plt
 import numpy as np
+import multiprocessing, gc
 
-import os, sys
+import os, sys, json, ijson
 
 def mean(arr:list):
 	if len(arr) == 0:
@@ -125,12 +127,14 @@ def toBoundary(rle:object, dilation_ratio:float=0.02):
 	import pycocotools.mask as maskUtils
 	mask = maskUtils.decode(rle)
 	boundary = maskToBoundary(mask, dilation_ratio)
-	return maskUtils.encode(np.array(boundary[:, :, None], order='F', dtype='uint8'))[0]
-
+	mask = maskUtils.encode(np.array(boundary[:, :, None], order='F', dtype='uint8'))[0]
+	mask['counts'] = mask['counts'].decode('ascii')
+	return mask
 
 def toBoundaryAll(anns:list, dilation_ratio):
 	for ann in anns:
-		ann['mask'] = toBoundary(ann['mask'], dilation_ratio)				
+		if ann['mask'] is not None:
+			ann['mask'] = toBoundary(ann['mask'], dilation_ratio)				
 	return anns
 
 def polyToBox(poly:list):
@@ -162,3 +166,81 @@ def chunks(lst, n):
 	"""
 	for i in range(0, len(lst), n):
 		yield lst[i:i + n]
+
+
+
+
+def _launchBoundarifyBatch(pool:multiprocessing.Pool, buffer:list, cpus:int, dilation_ratio:float):
+	if len(buffer) == 0:
+		return []
+
+	anns_split = np.array_split(buffer, cpus)
+	procs = []
+
+	for ann_set in anns_split:
+		p = pool.apply_async(toBoundaryAllStr, (ann_set, dilation_ratio))
+		procs.append(p)
+	
+	return procs
+
+def _waitBoundarifyBatch(procs:list, out_file:FileIO):
+	if len(procs) == 0:
+		return
+	
+	anns = []
+	
+	for p in procs:
+		anns.extend(p.get())
+	
+	for ann in anns:
+		out_file.write(ann)
+		out_file.write(',')
+
+	return anns
+	
+	
+
+def toBoundaryAllStr(anns:list, dilation_ratio):
+	for ann in anns:
+		if ann['segmentation'] is not None:
+			ann['segmentation'] = toBoundary(ann['segmentation'], dilation_ratio)
+	return [json.dumps(ann) for ann in anns]
+
+
+def boundarifyResults(in_path:str, out_path:str, batch_size:int=8000, cpus:int=80, dilation_ratio:float=0.02):
+	""" Loads a results file and converts the masks to boundaries. """
+	from tqdm import tqdm
+
+	with open(in_path, 'r') as in_file:
+		cpus = min(cpus, multiprocessing.cpu_count())
+		workers = multiprocessing.Pool(processes=cpus)
+		buffer = []
+		procs  = []
+
+		with open(out_path, 'w') as out_file:
+			out_file.write('[')
+			
+			print(f'Launching {cpus} workers to process annotations in batches of {batch_size}.')
+
+			for det in tqdm(ijson.items(in_file, 'item', use_float=True), desc='Transcribing Results'):
+				if 'segmentation' not in det: det['segmentation'] = None
+				if 'bbox'         not in det: det['bbox']         = None
+
+				buffer.append(det)
+
+				if len(buffer) >= batch_size:
+					_waitBoundarifyBatch(procs, out_file) # Wait for the last batch to finish
+					procs = _launchBoundarifyBatch(workers, buffer, cpus, dilation_ratio) # Start the next batch
+					buffer = [] # Stagger the _waitBoundarifyBatch call so that this thread can load more data
+					gc.collect() # Explicit garbage collection because this takes a lot of memory.
+			
+			# Wait for the staggered results.
+			_waitBoundarifyBatch(procs, out_file)
+			# In case we have a left over batch.
+			procs = _launchBoundarifyBatch(workers, buffer, cpus, dilation_ratio)
+			_waitBoundarifyBatch(procs, out_file)
+			
+			out_file.seek(-1, os.SEEK_CUR) # Remove the last comma
+			out_file.write(']')
+
+			print('Done.')
