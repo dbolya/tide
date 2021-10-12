@@ -1,9 +1,6 @@
 from __future__ import annotations
-import os
 
 from collections import defaultdict
-import numpy as np
-import cv2
 
 from . import functions as f
 
@@ -116,7 +113,9 @@ class Data():
 		Converts all of the annotation masks to be boundaries in order to use Boundary IoU.
 		See this paper for more details: https://arxiv.org/abs/2103.16562
 		"""
-		for ann in self.annotations:
+		from tqdm import tqdm
+
+		for ann in tqdm(self.annotations, desc='Converting to boundary'):
 			if ann['mask'] is not None:
 				ann['mask'] = f.toBoundary(ann['mask'], dilation_ratio)
 
