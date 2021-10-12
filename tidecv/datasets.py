@@ -7,8 +7,10 @@ from appdirs import user_data_dir
 import urllib.request
 from collections import defaultdict
 import shutil
-import json
+import json, ijson
 import os
+
+from tqdm import tqdm
 
 def default_name(path:str) -> str:
 	return os.path.splitext(os.path.basename(path))[0]
@@ -110,19 +112,17 @@ def COCOResult(path:str, name:str=None) -> Data:
 	""" Loads predictions from a COCO-style results file. """
 	if name is None: name = default_name(path)
 	
-	with open(path, 'r') as json_file:
-		dets = json.load(json_file)
-
 	data = Data(name)
 
-	for det in dets:
-		image = det['image_id']
-		_cls  = det['category_id']
-		score = det['score']
-		box   = det['bbox']         if 'bbox'         in det else None
-		mask  = det['segmentation'] if 'segmentation' in det else None
+	with open(path, 'r') as json_file:
+		for det in tqdm(ijson.items(json_file, 'item'), desc='Loading results file'):
+			image = det['image_id']
+			_cls  = det['category_id']
+			score = det['score']
+			box   = det['bbox']         if 'bbox'         in det else None
+			mask  = det['segmentation'] if 'segmentation' in det else None
 
-		data.add_detection(image, _cls, score, box, mask)
+			data.add_detection(image, _cls, score, box, mask)
 	
 	return data
 	
