@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import numpy as np
 
 from . import functions as f
 
@@ -108,16 +109,62 @@ class Data():
 		return [self.annotations[x] for x in self.images[image_id]['anns']]
 
 
-	def convert_to_boundary(self, dilation_ratio:float=0.02):
+	def convert_to_boundary(self, dilation_ratio:float=0.02, cpus:int=1):
 		"""
 		Converts all of the annotation masks to be boundaries in order to use Boundary IoU.
 		See this paper for more details: https://arxiv.org/abs/2103.16562
-		"""
-		from tqdm import tqdm
 
-		for ann in tqdm(self.annotations, desc='Converting to boundary'):
-			if ann['mask'] is not None:
-				ann['mask'] = f.toBoundary(ann['mask'], dilation_ratio)
+		For cpus > 1, a multiprocessing version will be used.
+		"""
+
+		if cpus <= 1:
+			from tqdm import tqdm
+			
+			# Single threaded approach
+			for ann in tqdm(self.annotations, desc='Converting to boundary'):
+				if ann['mask'] is not None:
+					ann['mask'] = f.toBoundary(ann['mask'], dilation_ratio)
+		else:
+			# Multithreaded approach
+			import multiprocessing, gc
+
+			cpus = min(cpus, multiprocessing.cpu_count())
+
+			ignore_anns = []
+			mask_anns   = []
+
+			# Sort out the ignore regions so we can split the annotations properly
+			for ann in self.annotations:
+				if ann['mask'] is None:
+					ignore_anns.append(ann)
+				else:
+					mask_anns.append(ann)
+			
+			# Get rid of self.annotations so we can manage memory better later
+			self.annotations = []
+
+			anns_split = np.array_split(mask_anns, cpus)
+			workers = multiprocessing.Pool(processes=cpus)
+			procs = []
+
+			print(f'Launching {cpus} workers to process {len(mask_anns)} annotations.')
+			for ann_set in anns_split:
+				p = workers.apply_async(f.toBoundaryAll, (ann_set, dilation_ratio))
+				procs.append(p)
+			
+			# Free the memory associated with the old annotations
+			del anns_split
+			del mask_anns
+			gc.collect()
+
+			print('Waiting for workers...')
+			for p in procs:
+				self.annotations.extend(p.get())
+			
+			# Add the ignore annotations back at the end.
+			# I don't know if it really needs to be at the end, but I'm afraid to find out.
+			self.annotations.extend(ignore_anns)
+			print('Done.')
 
 
 

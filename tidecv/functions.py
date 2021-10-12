@@ -128,6 +128,11 @@ def toBoundary(rle:object, dilation_ratio:float=0.02):
 	return maskUtils.encode(np.array(boundary[:, :, None], order='F', dtype='uint8'))[0]
 
 
+def toBoundaryAll(anns:list, dilation_ratio):
+	for ann in anns:
+		ann['mask'] = toBoundary(ann['mask'], dilation_ratio)				
+	return anns
+
 def polyToBox(poly:list):
 	""" Converts a polygon in COCO lists of lists format to a bounding box in [x, y, w, h]. """
 
@@ -147,3 +152,13 @@ def polyToBox(poly:list):
 			ymax = max(y, ymax)
 	
 	return [xmin, ymin, (xmax - xmin), (ymax - ymin)]
+
+
+
+def chunks(lst, n):
+	"""
+	Yield successive n-sized chunks from lst.
+	From https://stackoverflow.com/questions/312443/how-do-you-split-a-list-into-evenly-sized-chunks
+	"""
+	for i in range(0, len(lst), n):
+		yield lst[i:i + n]
