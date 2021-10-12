@@ -210,37 +210,37 @@ def toBoundaryAllStr(anns:list, dilation_ratio):
 def boundarifyResults(in_path:str, out_path:str, batch_size:int=8000, cpus:int=80, dilation_ratio:float=0.02):
 	""" Loads a results file and converts the masks to boundaries. """
 	from tqdm import tqdm
+	
+	cpus = min(cpus, multiprocessing.cpu_count())
+	with multiprocessing.Pool(processes=cpus) as workers:
+		with open(in_path, 'r') as in_file:
+			buffer = []
+			procs  = []
 
-	with open(in_path, 'r') as in_file:
-		cpus = min(cpus, multiprocessing.cpu_count())
-		workers = multiprocessing.Pool(processes=cpus)
-		buffer = []
-		procs  = []
+			with open(out_path, 'w') as out_file:
+				out_file.write('[')
+				
+				print(f'Launching {cpus} workers to process annotations in batches of {batch_size}.')
 
-		with open(out_path, 'w') as out_file:
-			out_file.write('[')
-			
-			print(f'Launching {cpus} workers to process annotations in batches of {batch_size}.')
+				for det in tqdm(ijson.items(in_file, 'item', use_float=True), desc='Transcribing Results'):
+					if 'segmentation' not in det: det['segmentation'] = None
+					if 'bbox'         not in det: det['bbox']         = None
 
-			for det in tqdm(ijson.items(in_file, 'item', use_float=True), desc='Transcribing Results'):
-				if 'segmentation' not in det: det['segmentation'] = None
-				if 'bbox'         not in det: det['bbox']         = None
+					buffer.append(det)
 
-				buffer.append(det)
+					if len(buffer) >= batch_size:
+						_waitBoundarifyBatch(procs, out_file) # Wait for the last batch to finish
+						procs = _launchBoundarifyBatch(workers, buffer, cpus, dilation_ratio) # Start the next batch
+						buffer = [] # Stagger the _waitBoundarifyBatch call so that this thread can load more data
+						gc.collect() # Explicit garbage collection because this takes a lot of memory.
 
-				if len(buffer) >= batch_size:
-					_waitBoundarifyBatch(procs, out_file) # Wait for the last batch to finish
-					procs = _launchBoundarifyBatch(workers, buffer, cpus, dilation_ratio) # Start the next batch
-					buffer = [] # Stagger the _waitBoundarifyBatch call so that this thread can load more data
-					gc.collect() # Explicit garbage collection because this takes a lot of memory.
-			
-			# Wait for the staggered results.
-			_waitBoundarifyBatch(procs, out_file)
-			# In case we have a left over batch.
-			procs = _launchBoundarifyBatch(workers, buffer, cpus, dilation_ratio)
-			_waitBoundarifyBatch(procs, out_file)
-			
-			out_file.seek(-1, os.SEEK_CUR) # Remove the last comma
-			out_file.write(']')
-
-			print('Done.')
+				# Wait for the staggered results.
+				_waitBoundarifyBatch(procs, out_file)
+				# In case we have a left over batch.
+				procs = _launchBoundarifyBatch(workers, buffer, cpus, dilation_ratio)
+				_waitBoundarifyBatch(procs, out_file)
+				
+				out_file.seek(out_file.tell()-1, os.SEEK_SET) # Remove the last comma
+				out_file.truncate()
+				out_file.write(']')
+	print('Done.')
