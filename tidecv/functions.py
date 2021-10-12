@@ -95,6 +95,38 @@ def toRLE(mask:object, w:int, h:int):
 	else:
 		return mask
 
+def maskToBoundary(mask:np.ndarray, dilation_ratio:float):
+	"""
+	Borrowed from LVIS:
+	Convert a numpy mask to its boundary.
+	Requires OpenCV.
+	"""
+	import cv2
+	
+	h, w = mask.shape
+	img_diag = np.sqrt(h ** 2 + w ** 2)
+	dilation = int(round(dilation_ratio * img_diag))
+	if dilation < 1:
+		dilation = 1
+	# Pad image so mask truncated by the image border is also considered as boundary.
+	new_mask = cv2.copyMakeBorder(mask, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
+	kernel = np.ones((3, 3), dtype=np.uint8)
+	new_mask_erode = cv2.erode(new_mask, kernel, iterations=dilation)
+	mask_erode = new_mask_erode[1 : h + 1, 1 : w + 1]
+
+	return mask - mask_erode
+
+
+def toBoundary(rle:object, dilation_ratio:float=0.02):
+	"""
+	Borrowed from LVIS:
+	Convert an RLE to a boundary RLE to compute Boundary IoU.
+	"""
+	import pycocotools.mask as maskUtils
+	mask = maskUtils.decode(rle)
+	boundary = maskToBoundary(mask, dilation_ratio)
+	return maskUtils.encode(np.array(boundary[:, :, None], order='F', dtype='uint8'))[0]
+
 
 def polyToBox(poly:list):
 	""" Converts a polygon in COCO lists of lists format to a bounding box in [x, y, w, h]. """

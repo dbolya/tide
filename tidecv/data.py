@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 
 from collections import defaultdict
@@ -16,6 +17,7 @@ class Data():
 	
 	'max_dets' specifies the maximum number of detections the model is allowed to output for a given image.
 	"""
+
 
 	def __init__(self, name:str, max_dets:int=100):
 		self.name     = name
@@ -104,7 +106,52 @@ class Data():
 		""" Register an image name/path with an image ID. """
 		self.images[id]['name'] = name
 
-
 	def get(self, image_id:int):
 		""" Collects all the annotations / detections for that particular image. """
 		return [self.annotations[x] for x in self.images[image_id]['anns']]
+
+
+	def convert_to_boundary(self, dilation_ratio:float=0.02):
+		"""
+		Converts all of the annotation masks to be boundaries in order to use Boundary IoU.
+		See this paper for more details: https://arxiv.org/abs/2103.16562
+		"""
+		for ann in self.annotations:
+			if ann['mask'] is not None:
+				ann['mask'] = f.toBoundary(ann['mask'], dilation_ratio)
+
+
+
+
+	def save(self, path:str):
+		import msgpack
+
+		out_dict = {
+			'name': self.name,
+			'max_dets': self.max_dets,
+
+			'classes': self.classes,
+			'annotations': self.annotations,
+
+			'images': dict(self.images),
+		}
+
+		with open(path, 'wb') as f:
+			msgpack.dump(out_dict, f)
+
+
+	@staticmethod
+	def load(path:str) -> Data:
+		import msgpack
+
+		with open(path, 'rb') as f:
+			out_dict = msgpack.load(f, encoding='utf-8')
+
+		data = Data(out_dict['name'], out_dict['max_dets'])
+
+		data.classes = out_dict['classes']
+		data.annotations = out_dict['annotations']
+		data.images.update(out_dict['images'])
+
+		return data
+

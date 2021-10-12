@@ -103,7 +103,7 @@ def COCO(path:str=None, name:str=None, year:int=2017, ann_set:str='val', force_d
 		
 		if ann['iscrowd']: data.add_ignore_region(image, _class, box, mask)
 		else:              data.add_ground_truth (image, _class, box, mask)
-	
+
 	return data
 
 def COCOResult(path:str, name:str=None) -> Data:
@@ -128,7 +128,7 @@ def COCOResult(path:str, name:str=None) -> Data:
 	
 
 
-def LVIS(path:str=None, name:str=None, version_str:str='v1', force_download:bool=False) -> Data:
+def LVIS(path:str=None, name:str=None, version_str:str='v1', force_download:bool=False, max_dets:int=300) -> Data:
 	"""
 	Load an LVIS-style dataset.
 	The version string is used for downloading the dataset and should be one of the versions of LVIS (e.g., v0.5, v1).
@@ -141,6 +141,9 @@ def LVIS(path:str=None, name:str=None, version_str:str='v1', force_download:bool
 	during mAP calculation and error processing, so adding a bunch of them doesn't hurt.
 	
 	The LVIS AP numbers are slightly lower than what the LVIS API reports because of these workarounds.
+	
+	For the LVIS challenge starting with 2021, the maximum detections per image was uncapped and a limit
+	of 10k annotations per class was instated instead. To emulate this, set max_dets to something really high.
 	"""
 	if path is None:
 		path = download_annotations(
@@ -161,7 +164,7 @@ def LVIS(path:str=None, name:str=None, version_str:str='v1', force_download:bool
 	anns   = lvisjson['annotations']
 	cats   = lvisjson['categories'] if 'categories' in lvisjson else None
 
-	data = Data(name, max_dets=300)
+	data = Data(name, max_dets=max_dets)
 	image_lookup = {}
 	classes_in_img = defaultdict(lambda: set())
 
