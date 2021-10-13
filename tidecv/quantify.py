@@ -10,6 +10,7 @@ from collections import defaultdict, OrderedDict
 import numpy as np
 from typing import Union
 import os, math
+from tqdm import tqdm
 
 class TIDEExample:
 	""" Computes all the data needed to evaluate a set of predictions and gt for a single image. """
@@ -157,7 +158,7 @@ class TIDERun:
 	def _run(self):
 		""" And awaaay we go """
 
-		for image in self.gt.images:
+		for image in tqdm(self.gt.images, desc='Evaluating Images'):
 			x = self.preds.get(image)
 			y = self.gt.get(image)
 
