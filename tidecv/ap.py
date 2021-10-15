@@ -56,7 +56,10 @@ class APDataObject:
 		self.num_gt_positives += num_positives
 
 	def is_empty(self) -> bool:
-		return len(self.data_points) == 0 and self.num_gt_positives == 0
+		# The COCO toolkit only skips a class's AP if there are no GT positives.
+		# It doesn't really care whether there are predictions or not.
+		# Shout out to https://github.com/dbolya/tide/issues/28, I was pulling my hair out over that one.
+		return self.num_gt_positives == 0
 
 	def get_pr_curve(self) -> tuple:
 		if self.curve is None:
