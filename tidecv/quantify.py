@@ -1,8 +1,12 @@
+""" Copyright (c) 2020 Daniel Bolya, based on https://github.com/dbolya/tide """
+
+import os
 from collections import OrderedDict, defaultdict
 
 import numpy as np
 
-from . import functions as f, plotting as P
+from . import functions as f
+from . import plotting as P
 from .ap import ClassedAPDataObject
 from .data import Data
 from .errors.main_errors import *
@@ -10,583 +14,862 @@ from .errors.qualifiers import Qualifier
 
 
 class TIDEExample:
-	""" Computes all the data needed to evaluate a set of predictions and gt for a single image. """
-	def __init__(self, preds:list, gt:list, pos_thresh:float, mode:str, max_dets:int, run_errors:bool=True):
-		self.preds          = preds
-		self.gt             = [x for x in gt if not x['ignore']]
-		self.ignore_regions = [x for x in gt if     x['ignore']]
-		
-		self.mode       = mode
-		self.pos_thresh = pos_thresh
-		self.max_dets   = max_dets
-		self.run_errors = run_errors
+    """Computes all the data needed to evaluate a set of predictions and gt for a single image."""
 
-		self._run()
-	
-	def _run(self):
-		preds    = self.preds
-		gt       = self.gt
-		ignore   = self.ignore_regions
-		det_type = 'bbox' if self.mode == TIDE.BOX else 'mask'
-		max_dets = self.max_dets
+    def __init__(
+        self,
+        preds: list,
+        gt: list,
+        pos_thresh: float,
+        mode: str,
+        max_dets: int,
+        run_errors: bool = True,
+    ):
+        self.preds = preds
+        self.gt = [x for x in gt if not x["ignore"]]
+        self.ignore_regions = [x for x in gt if x["ignore"]]
 
-		if len(preds) == 0:
-			raise RuntimeError('Example has no predictions!')
+        self.mode = mode
+        self.pos_thresh = pos_thresh
+        self.max_dets = max_dets
+        self.run_errors = run_errors
 
+        self._run()
 
-		# Sort descending by score
-		preds.sort(key=lambda pred: -pred['score'])
-		preds = preds[:max_dets]
-		self.preds = preds # Update internally so TIDERun can update itself if :max_dets takes effect
-		detections = [x[det_type] for x in preds]
+    def _run(self):
+        preds = self.preds
+        gt = self.gt
+        ignore = self.ignore_regions
+        det_type = "bbox" if self.mode == TIDE.BOX else "mask"
+        max_dets = self.max_dets
 
-		def jaccard(dets, gt):
-			xa, ya, x2a, y2a = dets[0], dets[1], dets[2], dets[3]
-			xb, yb, x2b, y2b = (
-				gt["bbox"][0],
-				gt["bbox"][1],
-				gt["bbox"][2],
-				gt["bbox"][3],
-			)
-			
-			# innermost left x
-			xi = max(xa, xb)
-			# innermost right x
-			x2i = min(x2a, x2b)
-			# same for y
-			yi = max(ya, yb)
-			y2i = min(y2a, y2b)
-			
-			# calculate areas
-			Aa = max(x2a - xa, 0) * max(y2a - ya, 0)
-			Ab = max(x2b - xb, 0) * max(y2b - yb, 0)
-			Ai = max(x2i - xi, 0) * max(y2i - yi, 0)
-			
-			return Ai / (Aa + Ab - Ai)
-		
-		# IoU is [len(detections), len(gt)]
-		self.gt_iou = np.ones((len(detections), len(gt))) * -1
-		
-		for id_d, d in enumerate(detections):
-			for id_g, g in enumerate(gt):
-				self.gt_iou[id_d, id_g] = jaccard(d, g)
-		assert (
-				np.amin(self.gt_iou) >= 0.0
-		), "jaccard array contains values smaller than zero!"
+        if len(preds) == 0:
+            raise RuntimeError("Example has no predictions!")
 
-		# Store whether a prediction / gt got used in their data list
-		# Note: this is set to None if ignored, keep that in mind
-		for idx, pred in enumerate(preds):
-			pred['used'] = False
-			pred['_idx'] = idx
-			pred['iou']  = 0
-		for idx, truth in enumerate(gt):
-			truth['used']   = False
-			truth['usable'] = False
-			truth['_idx'] = idx
+        # Sort descending by score
+        preds.sort(key=lambda pred: -pred["score"])
+        preds = preds[:max_dets]
+        self.preds = preds  # Update internally so TIDERun can update itself if :max_dets takes effect
+        detections = [x[det_type] for x in preds]
 
-		pred_cls  = np.array([x['class'] for x in preds])
-		gt_cls    = np.array([x['class'] for x in gt])
+        def jaccard(dets, gt):
+            xa, ya, x2a, y2a = dets[0], dets[1], dets[2], dets[3]
+            xb, yb, x2b, y2b = (
+                gt["bbox"][0],
+                gt["bbox"][1],
+                gt["bbox"][2],
+                gt["bbox"][3],
+            )
 
-		if len(gt) > 0:
-			# A[i,j] is true iff the prediction i is of the same class as gt j
-			self.gt_cls_matching = (pred_cls[:, None] == gt_cls[None, :])
-			self.gt_cls_iou = self.gt_iou * self.gt_cls_matching
-			
-			# This will be changed in the matching calculation, so make a copy
-			iou_buffer = self.gt_cls_iou.copy()
+            # innermost left x
+            xi = max(xa, xb)
+            # innermost right x
+            x2i = min(x2a, x2b)
+            # same for y
+            yi = max(ya, yb)
+            y2i = min(y2a, y2b)
 
-			for pred_idx, pred_elem in enumerate(preds):
-				# Find the max iou ground truth for this prediction
-				gt_idx = np.argmax(iou_buffer[pred_idx, :])
-				iou = iou_buffer[pred_idx, gt_idx]
+            # calculate areas
+            Aa = max(x2a - xa, 0) * max(y2a - ya, 0)
+            Ab = max(x2b - xb, 0) * max(y2b - yb, 0)
+            Ai = max(x2i - xi, 0) * max(y2i - yi, 0)
 
-				pred_elem['iou'] = np.max(self.gt_cls_iou[pred_idx, :])
+            return Ai / (Aa + Ab - Ai)
 
-				if iou >= self.pos_thresh:
-					gt_elem = gt[gt_idx]
+        self.gt_iou = np.ones((len(detections), len(gt))) * -1
 
-					pred_elem['used'] = True
-					gt_elem['used']   = True
-					pred_elem['matched_with'] = gt_elem['_id']
-					gt_elem['matched_with']   = pred_elem['_id']
+        for id_d, d in enumerate(detections):
+            for id_g, g in enumerate(gt):
+                self.gt_iou[id_d, id_g] = jaccard(d, g)
+        assert (
+            np.amin(self.gt_iou) >= 0.0
+        ), "jaccard array contains values smaller than zero!"
 
-					# Make sure this gt can't be used again
-					iou_buffer[:, gt_idx] = 0
+        # IoU is [len(detections), len(gt)]
+        # self.gt_iou = mask_utils.iou(
+        # 	detections,
+        # 	[x[det_type] for x in gt],
+        # 	[False] * len(gt))
 
-		# Ignore regions annotations allow us to ignore predictions that fall within
-		if len(ignore) > 0:
-			# Because ignore regions have extra parameters, it's more efficient to use a for loop here
-			for ignore_region in ignore:
-				if ignore_region['mask'] is None and ignore_region['bbox'] is None:
-					# The region should span the whole image
-					ignore_iou = [1] * len(preds)
-				else:
-					continue
+        # Store whether a prediction / gt got used in their data list
+        # Note: this is set to None if ignored, keep that in mind
+        for idx, pred in enumerate(preds):
+            pred["used"] = False
+            pred["_idx"] = idx
+            pred["iou"] = 0
+        for idx, truth in enumerate(gt):
+            truth["used"] = False
+            truth["usable"] = False
+            truth["_idx"] = idx
 
-				for pred_idx, pred_elem in enumerate(preds):
-					if not pred_elem['used'] and (ignore_iou[pred_idx] > self.pos_thresh) \
-						and (ignore_region['class'] == pred_elem['class'] or ignore_region['class'] == -1):
-						# Set the prediction to be ignored
-						pred_elem['used'] = None
+        pred_cls = np.array([x["class"] for x in preds])
+        gt_cls = np.array([x["class"] for x in gt])
 
-		if len(gt) == 0:
-			return
+        if len(gt) > 0:
+            # A[i,j] is true iff the prediction i is of the same class as gt j
+            self.gt_cls_matching = pred_cls[:, None] == gt_cls[None, :]
+            self.gt_cls_iou = self.gt_iou * self.gt_cls_matching
 
-		# Some matrices used just for error calculation
-		if self.run_errors:
-			self.gt_used = np.array([x['used'] == True for x in gt])[None, :]
-			self.gt_unused = ~self.gt_used
+            # This will be changed in the matching calculation, so make a copy
+            iou_buffer = self.gt_cls_iou.copy()
 
-			self.gt_unused_iou    = self.gt_unused     *  self.gt_iou
-			self.gt_unused_cls    = self.gt_unused_iou *  self.gt_cls_matching
-			self.gt_unused_noncls = self.gt_unused_iou * ~self.gt_cls_matching
+            for pred_idx, pred_elem in enumerate(preds):
+                # Find the max iou ground truth for this prediction
+                gt_idx = np.argmax(iou_buffer[pred_idx, :])
+                iou = iou_buffer[pred_idx, gt_idx]
 
-			self.gt_noncls_iou    = self.gt_iou        * ~self.gt_cls_matching
+                pred_elem["iou"] = np.max(self.gt_cls_iou[pred_idx, :])
 
-			self.gt_used_iou      = self.gt_used       * self.gt_iou
-			self.gt_used_cls      = self.gt_used_iou   * self.gt_cls_matching
+                if iou >= self.pos_thresh:
+                    gt_elem = gt[gt_idx]
+
+                    pred_elem["used"] = True
+                    gt_elem["used"] = True
+                    pred_elem["matched_with"] = gt_elem["_id"]
+                    gt_elem["matched_with"] = pred_elem["_id"]
+
+                    # Make sure this gt can't be used again
+                    iou_buffer[:, gt_idx] = 0
+
+        # Ignore regions annotations allow us to ignore predictions that fall within
+        if len(ignore) > 0:
+            # Because ignore regions have extra parameters, it's more efficient to use a for loop here
+            for ignore_region in ignore:
+                if ignore_region["mask"] is None and ignore_region["bbox"] is None:
+                    # The region should span the whole image
+                    ignore_iou = [1] * len(preds)
+                else:
+                    if ignore_region[det_type] is None:
+                        # There is no det_type annotation for this specific region so skip it
+                        continue
+                    # Otherwise, compute the crowd IoU between the detections and this region
+                    # ignore_iou = mask_utils.iou(detections, [ignore_region[det_type]], [True])
+                    detections = detections
+                    det_type = det_type
+                    ignore_region = ignore_region
+                    t = 1
+                    # ignore_iou =
+
+                for pred_idx, pred_elem in enumerate(preds):
+                    if (
+                        not pred_elem["used"]
+                        and (ignore_iou[pred_idx] > self.pos_thresh)
+                        and (
+                            ignore_region["class"] == pred_elem["class"]
+                            or ignore_region["class"] == -1
+                        )
+                    ):
+                        # Set the prediction to be ignored
+                        pred_elem["used"] = None
+
+        if len(gt) == 0:
+            return
+
+        # Some matrices used just for error calculation
+        if self.run_errors:
+            self.gt_used = np.array([x["used"] == True for x in gt])[None, :]
+            self.gt_unused = ~self.gt_used
+
+            self.gt_unused_iou = self.gt_unused * self.gt_iou
+            self.gt_unused_cls = self.gt_unused_iou * self.gt_cls_matching
+            self.gt_unused_noncls = self.gt_unused_iou * ~self.gt_cls_matching
+
+            self.gt_noncls_iou = self.gt_iou * ~self.gt_cls_matching
+
+            self.gt_used_iou = self.gt_used * self.gt_iou
+            self.gt_used_cls = self.gt_used_iou * self.gt_cls_matching
 
 
 class TIDERun:
-	""" Holds the data for a single run of TIDE. """
+    """Holds the data for a single run of TIDE."""
 
-	# Temporary variables stored in ground truth that we need to clear after a run
-	_temp_vars = ['best_score', 'best_id', 'used', 'matched_with', '_idx', 'usable']
+    # Temporary variables stored in ground truth that we need to clear after a run
+    _temp_vars = ["best_score", "best_id", "used", "matched_with", "_idx", "usable"]
 
-	def __init__(self, gt:Data, preds:Data, pos_thresh:float, bg_thresh:float, mode:str, max_dets:int, run_errors:bool=True):
-		self.gt     = gt
-		self.preds  = preds
+    def __init__(
+        self,
+        gt: Data,
+        preds: Data,
+        pos_thresh: float,
+        bg_thresh: float,
+        mode: str,
+        max_dets: int,
+        run_errors: bool = True,
+    ):
+        self.gt = gt
+        self.preds = preds
 
-		self.errors     = []
-		self.error_dict = {_type: [] for _type in TIDE._error_types}
-		self.ap_data = ClassedAPDataObject()
-		self.qualifiers = {}
+        self.errors = []
+        self.error_dict = {_type: [] for _type in TIDE._error_types}
+        self.ap_data = ClassedAPDataObject()
+        self.qualifiers = {}
 
-		# A list of false negatives per class
-		self.false_negatives = {_id: [] for _id in self.gt.classes}
+        # A list of false negatives per class
+        self.false_negatives = {_id: [] for _id in self.gt.classes}
 
-		self.pos_thresh = pos_thresh
-		self.bg_thresh  = bg_thresh
-		self.mode       = mode
-		self.max_dets   = max_dets
-		self.run_errors = run_errors
+        self.pos_thresh = pos_thresh
+        self.bg_thresh = bg_thresh
+        self.mode = mode
+        self.max_dets = max_dets
+        self.run_errors = run_errors
 
-		self._run()
+        self._run()
 
+    def _run(self):
+        """And awaaay we go"""
 
-	def _run(self):
-		""" And awaaay we go """
+        for image in self.gt.images:
+            x = self.preds.get(image)
+            y = self.gt.get(image)
 
-		for image in self.gt.images:
-			x = self.preds.get(image)
-			y = self.gt.get(image)
+            # These classes are ignored for the whole image and not in the ground truth, so
+            # we can safely just remove these detections from the predictions at the start.
+            # However, since ignored detections are still used for error calculations, we have to keep them.
+            if not self.run_errors:
+                ignored_classes = self.gt._get_ignored_classes(image)
+                x = [pred for pred in x if pred["class"] not in ignored_classes]
 
-			# These classes are ignored for the whole image and not in the ground truth, so
-			# we can safely just remove these detections from the predictions at the start.
-			# However, since ignored detections are still used for error calculations, we have to keep them.
-			if not self.run_errors:
-				ignored_classes = self.gt._get_ignored_classes(image)
-				x = [pred for pred in x if pred['class'] not in ignored_classes]
+            self._eval_image(x, y)
 
-			self._eval_image(x, y)
+        # Store a fixed version of all the errors for testing purposes
+        for error in self.errors:
+            error.original = f.nonepack(error.unfix())
+            error.fixed = f.nonepack(error.fix())
+            error.disabled = False
 
-		# Store a fixed version of all the errors for testing purposes
-		for error in self.errors:
-			error.original = f.nonepack(error.unfix())
-			error.fixed    = f.nonepack(error.fix())
-			error.disabled = False
-		
-		self.ap = self.ap_data.get_mAP()
+        # Analyze TIDE errors
+        analyze_errors = False
+        if analyze_errors:
+            e = open("analysis_errors_TIDE.txt", "w")
+            for error in self.errors:
+                if error.short_name == "FalseNeg":
+                    e.write("FalseNeg\n")
+                if error.short_name == "FalsePos":
+                    e.write("FalsePos\n")
+                if error.short_name == "Miss":
+                    e.write(
+                        f'{error.gt["image"]}: ERROR={error.short_name}, missed class={error.gt["class"]}\n'
+                    )
+                else:
+                    e.write(
+                        f'{error.pred["image"]}: ERROR={error.short_name} with score={error.pred["score"]:.4f} and IoU={error.pred["iou"]}, class={error.pred["class"]}\n'
+                    )
+            e.close()
 
-		# Now that we've stored the fixed errors, we can clear the gt info
-		self._clear()
+        # Analyze TIDE's mAP classification and mAP calculation
+        analyze_classification = False
+        if analyze_classification:
+            analysis_dict = {}
+            for class_id in self.ap_data.objs:
+                points = self.ap_data.objs[class_id].data_points
+                for datum in points:
+                    gts = 0
+                    for gt in self.gt.annotations:
+                        if (
+                            gt["image"] == self.preds.annotations[datum]["image"]
+                            and gt["class"] == class_id
+                        ):
+                            gts += 1
+                    if class_id not in analysis_dict:
+                        # if self.preds.annotations[datum]["image"] not in analysis_dict[class_id]:
+                        analysis_dict[class_id] = {
+                            self.preds.annotations[datum]["image"]: [
+                                {
+                                    "gts": gts,
+                                    "det": points[datum][1],
+                                    "score": points[datum][0],
+                                    "iou": points[datum][2]["iou"],
+                                }
+                            ]
+                        }
+                        # analysis_dict[class_id] = [{'image': self.preds.annotations[datum]["image"], 'gts': gts, 'det': points[datum][1], 'score': points[datum][0], 'iou': points[datum][2]["iou"]}]
 
+                    else:
+                        if (
+                            self.preds.annotations[datum]["image"]
+                            in analysis_dict[class_id]
+                        ):
+                            analysis_dict[class_id][
+                                self.preds.annotations[datum]["image"]
+                            ].append(
+                                {
+                                    "gts": gts,
+                                    "det": points[datum][1],
+                                    "score": points[datum][0],
+                                    "iou": points[datum][2]["iou"],
+                                }
+                            )
+                        else:
+                            analysis_dict[class_id][
+                                self.preds.annotations[datum]["image"]
+                            ] = [
+                                {
+                                    "gts": gts,
+                                    "det": points[datum][1],
+                                    "score": points[datum][0],
+                                    "iou": points[datum][2]["iou"],
+                                }
+                            ]
 
+            h = open("analysis_TIDE.txt", "w")
+            for class_id in analysis_dict:
+                for image in analysis_dict[class_id]:
+                    scores = []
+                    dets = []
+                    ious = []
+                    gts = analysis_dict[class_id][image][0]["gts"]
+                    for el in analysis_dict[class_id][image]:
+                        scores.append(el["score"])
+                        dets.append(el["det"])
+                        ious.append(el["iou"])
+                    h.write(
+                        f"{image}: GTs={gts}, dets={int(np.sum([1 for x in dets if x==True]))}/{len(dets)} (matched={dets}/all) with scores={scores} and IoUs={ious}\n"
+                    )
+            h.close()
 
+        self.ap = self.ap_data.get_mAP()
 
-	def _clear(self):
-		""" Clears the ground truth so that it's ready for another run. """
-		for gt in self.gt.annotations:
-			for var in self._temp_vars:
-				if var in gt:
-					del gt[var]
+        # Now that we've stored the fixed errors, we can clear the gt info
+        self._clear()
 
-	def _add_error(self, error):
-		self.errors.append(error)
-		self.error_dict[type(error)].append(error)
+    def _clear(self):
+        """Clears the ground truth so that it's ready for another run."""
+        for gt in self.gt.annotations:
+            for var in self._temp_vars:
+                if var in gt:
+                    del gt[var]
 
-	def _eval_image(self, preds:list, gt:list):
-		
-		for truth in gt:
-			if not truth['ignore']:
-				self.ap_data.add_gt_positives(truth['class'], 1)
+    def _add_error(self, error):
+        self.errors.append(error)
+        self.error_dict[type(error)].append(error)
 
-		if len(preds) == 0:
-			# There are no predictions for this image so add all gt as missed
-			for truth in gt:
-				if not truth['ignore']:
-					self.ap_data.push_false_negative(truth['class'], truth['_id'])
+    def _eval_image(self, preds: list, gt: list):
 
-					if self.run_errors:
-						self._add_error(MissedError(truth))
-						self.false_negatives[truth['class']].append(truth)
-			return
+        for truth in gt:
+            if not truth["ignore"]:
+                self.ap_data.add_gt_positives(truth["class"], 1)
 
-		ex = TIDEExample(preds, gt, self.pos_thresh, self.mode, self.max_dets, self.run_errors)
-		preds = ex.preds # In case the number of predictions was restricted to the max
+        if len(preds) == 0:
+            # There are no predictions for this image so add all gt as missed
+            for truth in gt:
+                if not truth["ignore"]:
+                    self.ap_data.push_false_negative(truth["class"], truth["_id"])
 
-		for pred_idx, pred in enumerate(preds):
+                    if self.run_errors:
+                        self._add_error(MissedError(truth))
+                        self.false_negatives[truth["class"]].append(truth)
+            return
 
-			pred['info'] = {'iou': pred['iou'], 'used': pred['used']}
-			if pred['used']: pred['info']['matched_with'] = pred['matched_with']
-			
-			if pred['used'] is not None:
-				self.ap_data.push(pred['class'], pred['_id'], pred['score'], pred['used'], pred['info'])
-			
-			# ----- ERROR DETECTION ------ #
-			# This prediction is a negative (or ignored), let's find out why
-			if self.run_errors and (pred['used'] == False or pred['used'] == None):
-				# Test for BackgroundError
-				if len(ex.gt) == 0: # Note this is ex.gt because it doesn't include ignore annotations
-					# There is no ground truth for this image, so just mark everything as BackgroundError
-					self._add_error(BackgroundError(pred))
-					continue
+        ex = TIDEExample(
+            preds, gt, self.pos_thresh, self.mode, self.max_dets, self.run_errors
+        )
+        preds = ex.preds  # In case the number of predictions was restricted to the max
 
-				# Test for BoxError
-				idx = ex.gt_cls_iou[pred_idx, :].argmax()
-				if self.bg_thresh <= ex.gt_cls_iou[pred_idx, idx] <= self.pos_thresh:
-					# This detection would have been positive if it had higher IoU with this GT
-					self._add_error(BoxError(pred, ex.gt[idx], ex))
-					continue
+        for pred_idx, pred in enumerate(preds):
 
-				# Test for ClassError
-				idx = ex.gt_noncls_iou[pred_idx, :].argmax()
-				if ex.gt_noncls_iou[pred_idx, idx] >= self.pos_thresh:
-					# This detection would have been a positive if it was the correct class
-					self._add_error(ClassError(pred, ex.gt[idx], ex))
-					continue
+            pred["info"] = {"iou": pred["iou"], "used": pred["used"]}
+            if pred["used"]:
+                pred["info"]["matched_with"] = pred["matched_with"]
 
-				# Test for DuplicateError
-				idx = ex.gt_used_cls[pred_idx, :].argmax()
-				if ex.gt_used_cls[pred_idx, idx] >= self.pos_thresh:
-					# The detection would have been marked positive but the GT was already in use
-					suppressor = self.preds.annotations[ex.gt[idx]['matched_with']]
-					self._add_error(DuplicateError(pred, suppressor))
-					continue
-					
-				# Test for BackgroundError
-				idx = ex.gt_iou[pred_idx, :].argmax()
-				if ex.gt_iou[pred_idx, idx] <= self.bg_thresh:
-					# This should have been marked as background
-					self._add_error(BackgroundError(pred))
-					continue
+            if pred["used"] is not None:
+                self.ap_data.push(
+                    pred["class"],
+                    pred["_id"],
+                    pred["score"],
+                    pred["used"],
+                    pred["info"],
+                )
 
-				# A base case to catch uncaught errors
-				self._add_error(OtherError(pred))
-		
-		for truth in gt:
-			# If the GT wasn't used in matching, meaning it's some kind of false negative
-			if not truth['ignore'] and not truth['used']:
-				self.ap_data.push_false_negative(truth['class'], truth['_id'])
+            # ----- ERROR DETECTION ------ #
+            # This prediction is a negative (or ignored), let's find out why
+            if self.run_errors and (pred["used"] == False or pred["used"] == None):
+                # Test for BackgroundError
+                if (
+                    len(ex.gt) == 0
+                ):  # Note this is ex.gt because it doesn't include ignore annotations
+                    # There is no ground truth for this image, so just mark everything as BackgroundError
+                    self._add_error(BackgroundError(pred))
+                    continue
 
-				if self.run_errors:
-					self.false_negatives[truth['class']].append(truth)
-					
-					# The GT was completely missed, no error can correct it
-					# Note: 'usable' is set in error.py
-					if not truth['usable']:
-						self._add_error(MissedError(truth))
-				
+                # Test for BoxError
+                idx = ex.gt_cls_iou[pred_idx, :].argmax()
+                if self.bg_thresh <= ex.gt_cls_iou[pred_idx, idx] <= self.pos_thresh:
+                    # This detection would have been positive if it had higher IoU with this GT
+                    self._add_error(BoxError(pred, ex.gt[idx], ex))
+                    continue
 
+                # Test for ClassError
+                idx = ex.gt_noncls_iou[pred_idx, :].argmax()
+                if ex.gt_noncls_iou[pred_idx, idx] >= self.pos_thresh:
+                    # This detection would have been a positive if it was the correct class
+                    self._add_error(ClassError(pred, ex.gt[idx], ex))
+                    continue
 
-	def fix_errors(self, condition=lambda x: False, transform=None, false_neg_dict:dict=None,
-				   ap_data:ClassedAPDataObject=None,
-				   disable_errors:bool=False) -> ClassedAPDataObject:
-		""" Returns a ClassedAPDataObject where all errors given the condition returns True are fixed. """
-		if ap_data is None:
-			ap_data = self.ap_data
+                # Test for DuplicateError
+                idx = ex.gt_used_cls[pred_idx, :].argmax()
+                if ex.gt_used_cls[pred_idx, idx] >= self.pos_thresh:
+                    # The detection would have been marked positive but the GT was already in use
+                    suppressor = self.preds.annotations[ex.gt[idx]["matched_with"]]
+                    self._add_error(DuplicateError(pred, suppressor))
+                    continue
 
-		gt_pos = ap_data.get_gt_positives()
-		new_ap_data = ClassedAPDataObject()
+                # Test for BackgroundError
+                idx = ex.gt_iou[pred_idx, :].argmax()
+                if ex.gt_iou[pred_idx, idx] <= self.bg_thresh:
+                    # This should have been marked as background
+                    self._add_error(BackgroundError(pred))
+                    continue
 
-		# Potentially fix every error case
-		for error in self.errors:
-			if error.disabled:
-				continue
+                # A base case to catch uncaught errors
+                self._add_error(OtherError(pred))
 
-			_id = error.get_id()
-			_cls, data_point = error.original
+        for truth in gt:
+            # If the GT wasn't used in matching, meaning it's some kind of false negative
+            if not truth["ignore"] and not truth["used"]:
+                self.ap_data.push_false_negative(truth["class"], truth["_id"])
 
-			if condition(error):
-				_cls, data_point = error.fixed
-				
-				if disable_errors:
-					error.disabled = True
-				
-				# Specific for MissingError (or anything else that affects #GT)
-				if isinstance(data_point, int):
-					gt_pos[_cls] += data_point
-					data_point = None
-			
-			if data_point is not None:
-				if transform is not None:
-					data_point = transform(*data_point)
-				new_ap_data.push(_cls, _id, *data_point)
-			
-		# Add back all the correct ones
-		for k in gt_pos.keys():
-			for _id, (score, correct, info) in ap_data.objs[k].data_points.items():
-				if correct:
-					if transform is not None:
-						score, correct, info = transform(score, correct, info)
-					new_ap_data.push(k, _id, score, correct, info)
+                if self.run_errors:
+                    self.false_negatives[truth["class"]].append(truth)
 
-		# Add the correct amount of GT positives, and also subtract if necessary
-		for k, v in gt_pos.items():
-			# In case you want to fix all false negatives without affecting precision
-			if false_neg_dict is not None and k in false_neg_dict:
-				v -= len(false_neg_dict[k])
-			new_ap_data.add_gt_positives(k, v)
-			
-		return new_ap_data
+                    # The GT was completely missed, no error can correct it
+                    # Note: 'usable' is set in error.py
+                    if not truth["usable"]:
+                        self._add_error(MissedError(truth))
 
-	def fix_main_errors(self, progressive:bool=False, error_types:list=None, qual:Qualifier=None) -> dict:
-		ap_data = self.ap_data
-		last_ap = self.ap
+    def fix_errors(
+        self,
+        condition=lambda x: False,
+        transform=None,
+        false_neg_dict: dict = None,
+        ap_data: ClassedAPDataObject = None,
+        disable_errors: bool = False,
+    ) -> ClassedAPDataObject:
+        """Returns a ClassedAPDataObject where all errors given the condition returns True are fixed."""
+        if ap_data is None:
+            ap_data = self.ap_data
 
-		if qual is None:
-			qual = Qualifier('', None)
+        gt_pos = ap_data.get_gt_positives()
+        new_ap_data = ClassedAPDataObject()
 
-		if error_types is None:
-			error_types = TIDE._error_types
+        # Potentially fix every error case
+        for error in self.errors:
+            if error.disabled:
+                continue
 
-		errors = {}
+            _id = error.get_id()
+            _cls, data_point = error.original
 
-		for error in error_types:
-			_ap_data = self.fix_errors(qual._make_error_func(error),
-				ap_data=ap_data, disable_errors=progressive)
-			
-			new_ap = _ap_data.get_mAP()
-			# If an error is negative that means it's likely due to binning differences, so just
-			# Ignore the negative by setting it to 0.
-			errors[error] = max(new_ap - last_ap, 0)
-			
-			if progressive:
-				last_ap = new_ap
-				ap_data = _ap_data
+            if condition(error):
+                _cls, data_point = error.fixed
 
-		if progressive:
-			for error in self.errors:
-				error.disabled = False
+                if disable_errors:
+                    error.disabled = True
 
-		return errors
-	
-	def fix_special_errors(self, qual=None) -> dict:
-		return {
-			FalsePositiveError: self.fix_errors(transform=FalsePositiveError.fix).get_mAP()    - self.ap,
-			FalseNegativeError: self.fix_errors(false_neg_dict=self.false_negatives).get_mAP() - self.ap}
+                # Specific for MissingError (or anything else that affects #GT)
+                if isinstance(data_point, int):
+                    gt_pos[_cls] += data_point
+                    data_point = None
 
+            if data_point is not None:
+                if transform is not None:
+                    data_point = transform(*data_point)
+                new_ap_data.push(_cls, _id, *data_point)
 
-	def apply_qualifier(self, qualifier:Qualifier) -> ClassedAPDataObject:
-		""" Applies a qualifier lambda to the AP object for this runs and stores the result in self.qualifiers. """
+        # Add back all the correct ones
+        for k in gt_pos.keys():
+            for _id, (score, correct, info) in ap_data.objs[k].data_points.items():
+                if correct:
+                    if transform is not None:
+                        score, correct, info = transform(score, correct, info)
+                    new_ap_data.push(k, _id, score, correct, info)
 
-		pred_keep = defaultdict(lambda: set())
-		gt_keep   = defaultdict(lambda: set())
+        # Add the correct amount of GT positives, and also subtract if necessary
+        for k, v in gt_pos.items():
+            # In case you want to fix all false negatives without affecting precision
+            if false_neg_dict is not None and k in false_neg_dict:
+                v -= len(false_neg_dict[k])
+            new_ap_data.add_gt_positives(k, v)
 
-		for pred in self.preds.annotations:
-			if qualifier.test(pred):
-				pred_keep[pred['class']].add(pred['_id'])
-		
-		for gt in self.gt.annotations:
-			if not gt['ignore'] and qualifier.test(gt):
-				gt_keep[gt['class']].add(gt['_id'])
-		
-		new_ap_data = self.ap_data.apply_qualifier(pred_keep, gt_keep)
-		self.qualifiers[qualifier.name] = new_ap_data.get_mAP()
-		return new_ap_data
-		
+        return new_ap_data
+
+    def fix_main_errors(
+        self,
+        progressive: bool = False,
+        error_types: list = None,
+        qual: Qualifier = None,
+    ) -> dict:
+        ap_data = self.ap_data
+        last_ap = self.ap
+
+        if qual is None:
+            qual = Qualifier("", None)
+
+        if error_types is None:
+            error_types = TIDE._error_types
+
+        errors = {}
+
+        for error in error_types:
+            _ap_data = self.fix_errors(
+                qual._make_error_func(error),
+                ap_data=ap_data,
+                disable_errors=progressive,
+            )
+
+            new_ap = _ap_data.get_mAP()
+            # If an error is negative that means it's likely due to binning differences, so just
+            # Ignore the negative by setting it to 0.
+            errors[error] = max(new_ap - last_ap, 0)
+
+            if progressive:
+                last_ap = new_ap
+                ap_data = _ap_data
+
+        if progressive:
+            for error in self.errors:
+                error.disabled = False
+
+        return errors
+
+    def fix_special_errors(self, qual=None) -> dict:
+        return {
+            FalsePositiveError: self.fix_errors(
+                transform=FalsePositiveError.fix
+            ).get_mAP()
+            - self.ap,
+            FalseNegativeError: self.fix_errors(
+                false_neg_dict=self.false_negatives
+            ).get_mAP()
+            - self.ap,
+        }
+
+    def apply_qualifier(self, qualifier: Qualifier) -> ClassedAPDataObject:
+        """Applies a qualifier lambda to the AP object for this runs and stores the result in self.qualifiers."""
+
+        pred_keep = defaultdict(lambda: set())
+        gt_keep = defaultdict(lambda: set())
+
+        for pred in self.preds.annotations:
+            if qualifier.test(pred):
+                pred_keep[pred["class"]].add(pred["_id"])
+
+        for gt in self.gt.annotations:
+            if not gt["ignore"] and qualifier.test(gt):
+                gt_keep[gt["class"]].add(gt["_id"])
+
+        new_ap_data = self.ap_data.apply_qualifier(pred_keep, gt_keep)
+        self.qualifiers[qualifier.name] = new_ap_data.get_mAP()
+        return new_ap_data
 
 
 class TIDE:
-	"""
-	████████╗██╗██████╗ ███████╗
-	╚══██╔══╝██║██╔══██╗██╔════╝
-	   ██║   ██║██║  ██║█████╗  
-	   ██║   ██║██║  ██║██╔══╝  
-	   ██║   ██║██████╔╝███████╗
-	   ╚═╝   ╚═╝╚═════╝ ╚══════╝
-   """
+    """
+    ::
 
+        ████████╗██╗██████╗ ███████╗
+        ╚══██╔══╝██║██╔══██╗██╔════╝
+           ██║   ██║██║  ██║█████╗
+           ██║   ██║██║  ██║██╔══╝
+           ██║   ██║██████╔╝███████╗
+           ╚═╝   ╚═╝╚═════╝ ╚══════╝
+    """
 
-	# This is just here to define a consistent order of the error types
-	_error_types = [ClassError, BoxError, OtherError, DuplicateError, BackgroundError, MissedError]
-	_special_error_types = [FalsePositiveError, FalseNegativeError]
+    # This is just here to define a consistent order of the error types
+    _error_types = [
+        ClassError,
+        BoxError,
+        OtherError,
+        DuplicateError,
+        BackgroundError,
+        MissedError,
+    ]
+    _special_error_types = [FalsePositiveError, FalseNegativeError]
 
-	# Threshold splits for different challenges
-	COCO_THRESHOLDS = [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
-	VOL_THRESHOLDS  = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9] 
+    # Threshold splits for different challenges
+    COCO_THRESHOLDS = [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+    VOL_THRESHOLDS = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
-	# The modes of evaluation
-	BOX  = 'bbox'
-	MASK = 'mask'
+    # The modes of evaluation
+    BOX = "bbox"
+    MASK = "mask"
 
-	def __init__(self, pos_threshold:float=0.5, background_threshold:float=0.1, mode:str=BOX):
-		self.pos_thresh = pos_threshold
-		self.bg_thresh  = background_threshold
-		self.mode       = mode
+    def __init__(
+        self,
+        pos_threshold: float = 0.5,
+        background_threshold: float = 0.1,
+        mode: str = BOX,
+    ):
+        self.pos_thresh = pos_threshold
+        self.bg_thresh = background_threshold
+        self.mode = mode
 
-		self.pos_thresh_int = int(self.pos_thresh * 100)
+        self.pos_thresh_int = int(self.pos_thresh * 100)
 
-		self.runs = {}
-		self.run_thresholds = {}
-		self.run_main_errors = {}
-		self.run_special_errors = {}
+        self.runs = {}
+        self.run_thresholds = {}
+        self.run_main_errors = {}
+        self.run_special_errors = {}
 
-		self.qualifiers = OrderedDict()
+        self.qualifiers = OrderedDict()
 
+        # self.plotter = P.Plotter()
 
-	def evaluate(self, gt:Data, preds:Data, pos_threshold:float=None, background_threshold:float=None,
-					   mode:str=None, name:str=None, use_for_errors:bool=True) -> TIDERun:
-		pos_thresh = self.pos_thresh if pos_threshold        is None else pos_threshold
-		bg_thresh  = self.bg_thresh  if background_threshold is None else background_threshold
-		mode       = self.mode       if mode                 is None else mode
-		name       = preds.name      if name                 is None else name
+    def evaluate(
+        self,
+        gt: Data,
+        preds: Data,
+        pos_threshold: float = None,
+        background_threshold: float = None,
+        mode: str = None,
+        name: str = None,
+        use_for_errors: bool = True,
+    ) -> TIDERun:
+        pos_thresh = self.pos_thresh if pos_threshold is None else pos_threshold
+        bg_thresh = (
+            self.bg_thresh if background_threshold is None else background_threshold
+        )
+        mode = self.mode if mode is None else mode
+        name = preds.name if name is None else name
 
-		run = TIDERun(gt, preds, pos_thresh, bg_thresh, mode, gt.max_dets, use_for_errors)
+        run = TIDERun(
+            gt, preds, pos_thresh, bg_thresh, mode, gt.max_dets, use_for_errors
+        )
 
-		if use_for_errors:
-			self.runs[name] = run
-		
-		return run
+        if use_for_errors:
+            self.runs[name] = run
 
-	def evaluate_range(self, gt:Data, preds:Data, thresholds:list=COCO_THRESHOLDS, pos_threshold:float=None,
-							background_threshold:float=None, mode:str=None, name:str=None) -> dict:
+        return run
 
-		if pos_threshold is None: pos_threshold = self.pos_thresh
-		if name          is None: name          = preds.name
+    def evaluate_range(
+        self,
+        gt: Data,
+        preds: Data,
+        thresholds: list = COCO_THRESHOLDS,
+        pos_threshold: float = None,
+        background_threshold: float = None,
+        mode: str = None,
+        name: str = None,
+    ) -> dict:
 
-		self.run_thresholds[name] = []
+        if pos_threshold is None:
+            pos_threshold = self.pos_thresh
+        if name is None:
+            name = preds.name
 
-		for thresh in thresholds:
-			
-			run = self.evaluate(gt, preds, pos_threshold=thresh, background_threshold=background_threshold,
-				mode=mode, name=name, use_for_errors=(pos_threshold == thresh))
-			
-			self.run_thresholds[name].append(run)
+        self.run_thresholds[name] = []
 
-	def summarize(self):
-		""" Summarizes the mAP values and errors for all runs in this TIDE object. Results are printed to the console. """
-		main_errors    = self.get_main_errors()
-		special_errors = self.get_special_errors()
+        for thresh in thresholds:
 
-		for run_name, run in self.runs.items():
-			print('-- {} --\n'.format(run_name))
+            run = self.evaluate(
+                gt,
+                preds,
+                pos_threshold=thresh,
+                background_threshold=background_threshold,
+                mode=mode,
+                name=name,
+                use_for_errors=(pos_threshold == thresh),
+            )
 
-			# If we evaluated on all thresholds, print them here
-			if run_name in self.run_thresholds:
-				thresh_runs = self.run_thresholds[run_name]
-				aps = [trun.ap for trun in thresh_runs]
+            self.run_thresholds[name].append(run)
 
-				# Print Overall AP for a threshold run
-				ap_title = '{} AP @ [{:d}-{:d}]'.format(thresh_runs[0].mode, 
-					int(thresh_runs[0].pos_thresh*100), int(thresh_runs[-1].pos_thresh*100))
-				print('{:s}: {:.2f}'.format(ap_title, sum(aps)/len(aps)))
+    def add_qualifiers(self, *quals):
+        """
+        Applies any number of Qualifier objects to evaluations that have been run up to now.
+        See qualifiers.py for examples.
+        """
+        raise NotImplementedError("Qualifiers coming soon.")
+        # for q in quals:
+        # 	for run_name, run in self.runs.items():
+        # 		if run_name in self.run_thresholds:
+        # 			# If this was a threshold run, apply the qualifier for every run
+        # 			for trun in self.run_thresholds[run_name]:
+        # 				trun.apply_qualifier(q)
+        # 		else:
+        # 			# If this had no threshold, just apply it to the main run
+        # 			run.apply_qualifier(q)
 
-				# Print AP for every threshold on a threshold run
-				P.print_table([
-					['Thresh'] + [str(int(trun.pos_thresh*100)) for trun in thresh_runs],
-					['  AP  '] + ['{:6.2f}'.format(trun.ap) for trun in thresh_runs]
-				], title=ap_title)
+        # 	self.qualifiers[q.name] = q
 
-				# Print qualifiers for a threshold run
-				if len(self.qualifiers) > 0:
-					print()
-					# Can someone ban me from using list comprehension? this is unreadable
-					qAPs = [
-						f.mean(
-							[trun.qualifiers[q] for trun in thresh_runs if q in trun.qualifiers]
-						) for q in self.qualifiers
-					]
+    def summarize(self):
+        """Summarizes the mAP values and errors for all runs in this TIDE object. Results are printed to the console."""
+        main_errors = self.get_main_errors()
+        special_errors = self.get_special_errors()
 
-					P.print_table([
-						['Name'] + list(self.qualifiers.keys()),
-						[' AP '] + ['{:6.2f}'.format(qAP) for qAP in qAPs]
-					], title='Qualifiers {}'.format(ap_title))
+        for run_name, run in self.runs.items():
+            print("-- {} --\n".format(run_name))
 
-			# Otherwise, print just the one run we did
-			else:
-				# Print Overall AP for a regular run
-				ap_title = '{} AP @ {:d}'.format(run.mode, int(run.pos_thresh*100))
-				print('{}: {:.2f}'.format(ap_title, run.ap))
+            # If we evaluated on all thresholds, print them here
+            if run_name in self.run_thresholds:
+                thresh_runs = self.run_thresholds[run_name]
+                aps = [trun.ap for trun in thresh_runs]
 
-				# Print qualifiers for a regular run
-				if len(self.qualifiers) > 0:
-					print()
-					qAPs = [run.qualifiers[q] if q in run.qualifiers else 0 for q in self.qualifiers]
-					P.print_table([
-						['Name'] + list(self.qualifiers.keys()),
-						[' AP '] + ['{:6.2f}'.format(qAP) for qAP in qAPs]
-					], title='Qualifiers {}'.format(ap_title))
-			
+                # Print Overall AP for a threshold run
+                ap_title = "{} AP @ [{:d}-{:d}]".format(
+                    thresh_runs[0].mode,
+                    int(thresh_runs[0].pos_thresh * 100),
+                    int(thresh_runs[-1].pos_thresh * 100),
+                )
+                print("{:s}: {:.2f}".format(ap_title, sum(aps) / len(aps)))
 
+                # Print AP for every threshold on a threshold run
+                P.print_table(
+                    [
+                        ["Thresh"]
+                        + [str(int(trun.pos_thresh * 100)) for trun in thresh_runs],
+                        ["  AP  "]
+                        + ["{:6.2f}".format(trun.ap) for trun in thresh_runs],
+                    ],
+                    title=ap_title,
+                )
 
-			print()
-			# Print the main errors
-			P.print_table([
-				['Type'] + [err.short_name for err in TIDE._error_types],
-				[' dAP'] + ['{:6.2f}'.format(main_errors[run_name][err.short_name]) for err in TIDE._error_types]
-			], title='Main Errors')
+                # Print qualifiers for a threshold run
+                if len(self.qualifiers) > 0:
+                    print()
+                    # Can someone ban me from using list comprehension? this is unreadable
+                    qAPs = [
+                        f.mean(
+                            [
+                                trun.qualifiers[q]
+                                for trun in thresh_runs
+                                if q in trun.qualifiers
+                            ]
+                        )
+                        for q in self.qualifiers
+                    ]
 
-			
-				
-			print()
-			# Print the special errors
-			P.print_table([
-				['Type'] + [err.short_name for err in TIDE._special_error_types],
-				[' dAP'] + ['{:6.2f}'.format(special_errors[run_name][err.short_name]) for err in TIDE._special_error_types]
-			], title='Special Error')
-			
-			print()
+                    P.print_table(
+                        [
+                            ["Name"] + list(self.qualifiers.keys()),
+                            [" AP "] + ["{:6.2f}".format(qAP) for qAP in qAPs],
+                        ],
+                        title="Qualifiers {}".format(ap_title),
+                    )
 
-	def get_main_errors(self):
-		errors = {}
+            # Otherwise, print just the one run we did
+            else:
+                # Print Overall AP for a regular run
+                ap_title = "{} AP @ {:d}".format(run.mode, int(run.pos_thresh * 100))
+                print("{}: {:.2f}".format(ap_title, run.ap))
 
-		for run_name, run in self.runs.items():
-			if run_name in self.run_main_errors:
-				errors[run_name] = self.run_main_errors[run_name]
-			else:
-				errors[run_name] = {
-					error.short_name: value
-						for error, value in run.fix_main_errors().items()
-				}
-		
-		return errors
+                # Print qualifiers for a regular run
+                if len(self.qualifiers) > 0:
+                    print()
+                    qAPs = [
+                        run.qualifiers[q] if q in run.qualifiers else 0
+                        for q in self.qualifiers
+                    ]
+                    P.print_table(
+                        [
+                            ["Name"] + list(self.qualifiers.keys()),
+                            [" AP "] + ["{:6.2f}".format(qAP) for qAP in qAPs],
+                        ],
+                        title="Qualifiers {}".format(ap_title),
+                    )
 
-	def get_special_errors(self):
-		errors = {}
+            print()
+            # Print the main errors
+            P.print_table(
+                [
+                    ["Type"] + [err.short_name for err in TIDE._error_types],
+                    [" dAP"]
+                    + [
+                        "{:6.2f}".format(main_errors[run_name][err.short_name])
+                        for err in TIDE._error_types
+                    ],
+                ],
+                title="Main Errors",
+            )
 
-		for run_name, run in self.runs.items():
-			if run_name in self.run_special_errors:
-				errors[run_name] = self.run_special_errors[run_name]
-			else:
-				errors[run_name] = {
-					error.short_name: value
-						for error, value in run.fix_special_errors().items()
-				}
-		
-		return errors
-	
-	def get_all_errors(self):
-		"""
-		returns {
-			'main'   : { run_name: { error_name: float } },
-			'special': { run_name: { error_name: float } },
-		}
-		"""
-		return {
-			'main': self.get_main_errors(),
-			'special': self.get_special_errors()
-		}
+            print()
+            # Print the special errors
+            P.print_table(
+                [
+                    ["Type"] + [err.short_name for err in TIDE._special_error_types],
+                    [" dAP"]
+                    + [
+                        "{:6.2f}".format(special_errors[run_name][err.short_name])
+                        for err in TIDE._special_error_types
+                    ],
+                ],
+                title="Special Error",
+            )
 
+            print()
 
+            error_summary = {
+                err.short_name: main_errors[run_name][err.short_name]
+                for err in TIDE._error_types
+            }
+            for err in TIDE._special_error_types:
+                error_summary[err.short_name] = special_errors[run_name][err.short_name]
+
+            return error_summary
+
+    def plot(self, out_dir: str = None):
+        """
+        Plots a summary model for each run in this TIDE object.
+        Images will be outputted to out_dir, which will be created if it doesn't exist.
+        """
+
+        if out_dir is not None:
+            if not os.path.exists(out_dir):
+                os.makedirs(out_dir)
+
+        errors = self.get_all_errors()
+
+        max_main_error = max(
+            sum([list(x.values()) for x in errors["main"].values()], [])
+        )
+        max_spec_error = max(
+            sum([list(x.values()) for x in errors["special"].values()], [])
+        )
+        dap_granularity = 5  # The max will round up to the nearest unit of this
+
+        # # Round the plotter's dAP range up to the nearest granularity units
+        # if max_main_error > self.plotter.MAX_MAIN_DELTA_AP:
+        # 	self.plotter.MAX_MAIN_DELTA_AP = math.ceil(max_main_error / dap_granularity) * dap_granularity
+        # if max_spec_error > self.plotter.MAX_SPECIAL_DELTA_AP:
+        # 	self.plotter.MAX_SPECIAL_DELTA_AP = math.ceil(max_spec_error / dap_granularity) * dap_granularity
+
+        # # Do the plotting now
+        # for run_name, run in self.runs.items():
+        # 	self.plotter.make_summary_plot(out_dir, errors, run_name, run.mode, hbar_names=True)
+
+    def get_main_errors(self):
+        errors = {}
+
+        for run_name, run in self.runs.items():
+            if run_name in self.run_main_errors:
+                errors[run_name] = self.run_main_errors[run_name]
+            else:
+                errors[run_name] = {
+                    error.short_name: value
+                    for error, value in run.fix_main_errors().items()
+                }
+
+        return errors
+
+    def get_special_errors(self):
+        errors = {}
+
+        for run_name, run in self.runs.items():
+            if run_name in self.run_special_errors:
+                errors[run_name] = self.run_special_errors[run_name]
+            else:
+                errors[run_name] = {
+                    error.short_name: value
+                    for error, value in run.fix_special_errors().items()
+                }
+
+        return errors
+
+    def get_all_errors(self):
+        """
+        ::
+
+            returns {
+                'main'   : { run_name: { error_name: float } },
+                'special': { run_name: { error_name: float } },
+            }
+        """
+        return {"main": self.get_main_errors(), "special": self.get_special_errors()}
