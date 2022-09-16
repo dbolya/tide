@@ -1,14 +1,10 @@
 # Defines qualifiers like "Extra small box"
 
-
-
 def _area(x):
 	return x['bbox'][2] * x['bbox'][3]
 
 def _ar(x):
 	return x['bbox'][2] / x['bbox'][3]
-
-
 
 class Qualifier():
 	"""

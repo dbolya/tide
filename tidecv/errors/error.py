@@ -1,8 +1,5 @@
 from typing import Union
 
-import cv2
-from .. import functions as f
-
 class Error:
 	""" A base class for all error types. """
 
@@ -34,34 +31,6 @@ class Error:
 		else:
 			return -1
 	
-	
-	def show(self, dataset, out_path:str=None,
-		pred_color:tuple=(43, 12, 183), gt_color:tuple=(43, 183, 12),
-		font=cv2.FONT_HERSHEY_SIMPLEX):
-		
-		pred = self.pred if hasattr(self, 'pred') else self.gt
-		img = dataset.get_img_with_anns(pred['image_id'])
-
-		
-		if hasattr(self, 'gt'):
-			img = cv2.rectangle(img, *f.points(self.gt['bbox']), gt_color, 2)
-			img = cv2.putText(img, dataset.cat_name(self.gt['category_id']),
-				(100, 200), font, 1, gt_color, 2, cv2.LINE_AA, False)
-	
-		if hasattr(self, 'pred'):
-			img = cv2.rectangle(img, *f.points(pred['bbox']), pred_color, 2)
-			img = cv2.putText(img, '%s (%.2f)' % (dataset.cat_name(pred['category_id']), pred['score']),
-				(100, 100), font, 1, pred_color, 2, cv2.LINE_AA, False)
-
-		if out_path is None:
-			cv2.imshow(self.short_name, img)
-			cv2.moveWindow(self.short_name, 100, 100)
-
-			cv2.waitKey()
-			cv2.destroyAllWindows()
-		else:
-			cv2.imwrite(out_path, img)
-	
 	def get_info(self, dataset):
 		info = {}
 		info['type'] = self.short_name
@@ -76,12 +45,6 @@ class Error:
 		info['img']    = dataset.get_img(img_id)
 
 		return info
-
-
-
-
-
-
 
 
 class BestGTMatch:

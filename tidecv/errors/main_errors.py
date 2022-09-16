@@ -1,6 +1,3 @@
-from collections import defaultdict
-import numpy as np
-
 from .error import Error, BestGTMatch
 
 class ClassError(Error):

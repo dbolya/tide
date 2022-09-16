@@ -27,7 +27,7 @@ setup(
     python_requires='>=3.6',
     packages=["tidecv", "tidecv.errors"],
     include_package_data=True,
-    install_requires=["appdirs", "numpy", "opencv-python", "seaborn", "pandas", "matplotlib"],
+    install_requires=["numpy"],
     # entry_points={
     #     "console_scripts": [
     #         "tidecv=tidecv.__main__:main",
