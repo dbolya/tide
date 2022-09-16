@@ -1,11 +1,13 @@
-from .data import Data
-from .ap import ClassedAPDataObject
-from .errors.main_errors import *
-from .errors.qualifiers import Qualifier, AREA
-from . import functions as f
+from collections import OrderedDict, defaultdict
 
-from collections import defaultdict, OrderedDict
 import numpy as np
+
+from . import functions as f, plotting as P
+from .ap import ClassedAPDataObject
+from .data import Data
+from .errors.main_errors import *
+from .errors.qualifiers import Qualifier
+
 
 class TIDEExample:
 	""" Computes all the data needed to evaluate a set of predictions and gt for a single image. """
@@ -120,11 +122,7 @@ class TIDEExample:
 					# The region should span the whole image
 					ignore_iou = [1] * len(preds)
 				else:
-					if ignore_region[det_type] is None:
-						# There is no det_type annotation for this specific region so skip it
-						continue
-					# Otherwise, compute the crowd IoU between the detections and this region
-					ignore_iou = mask_utils.iou(detections, [ignore_region[det_type]], [True])
+					continue
 
 				for pred_idx, pred_elem in enumerate(preds):
 					if not pred_elem['used'] and (ignore_iou[pred_idx] > self.pos_thresh) \
@@ -388,21 +386,6 @@ class TIDERun:
 		return {
 			FalsePositiveError: self.fix_errors(transform=FalsePositiveError.fix).get_mAP()    - self.ap,
 			FalseNegativeError: self.fix_errors(false_neg_dict=self.false_negatives).get_mAP() - self.ap}
-
-	def count_errors(self, error_types:list=None, qual=None):
-		counts = {}
-
-		if error_types is None:
-			error_types = TIDE._error_types
-
-		for error in error_types:
-			if qual is None:
-				counts[error] = len(self.error_dict[error])
-			else:
-				func = qualifiers.make_qualifier(error, qual)
-				counts[error] = len([x for x in self.errors if func(x)])
-		
-		return counts
 
 
 	def apply_qualifier(self, qualifier:Qualifier) -> ClassedAPDataObject:
