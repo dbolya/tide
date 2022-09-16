@@ -5,7 +5,6 @@ from .errors.qualifiers import Qualifier, AREA
 from . import functions as f
 from . import plotting as P
 
-from pycocotools import mask as mask_utils
 from collections import defaultdict, OrderedDict
 import numpy as np
 from typing import Union
@@ -42,12 +41,39 @@ class TIDEExample:
 		self.preds = preds # Update internally so TIDERun can update itself if :max_dets takes effect
 		detections = [x[det_type] for x in preds]
 
+		def jaccard(dets, gt):
+			xa, ya, x2a, y2a = dets[0], dets[1], dets[2], dets[3]
+			xb, yb, x2b, y2b = (
+				gt["bbox"][0],
+				gt["bbox"][1],
+				gt["bbox"][2],
+				gt["bbox"][3],
+			)
+			
+			# innermost left x
+			xi = max(xa, xb)
+			# innermost right x
+			x2i = min(x2a, x2b)
+			# same for y
+			yi = max(ya, yb)
+			y2i = min(y2a, y2b)
+			
+			# calculate areas
+			Aa = max(x2a - xa, 0) * max(y2a - ya, 0)
+			Ab = max(x2b - xb, 0) * max(y2b - yb, 0)
+			Ai = max(x2i - xi, 0) * max(y2i - yi, 0)
+			
+			return Ai / (Aa + Ab - Ai)
 		
 		# IoU is [len(detections), len(gt)]
-		self.gt_iou = mask_utils.iou(
-			detections,
-			[x[det_type] for x in gt],
-			[False] * len(gt))
+		self.gt_iou = np.ones((len(detections), len(gt))) * -1
+		
+		for id_d, d in enumerate(detections):
+			for id_g, g in enumerate(gt):
+				self.gt_iou[id_d, id_g] = jaccard(d, g)
+		assert (
+				np.amin(self.gt_iou) >= 0.0
+		), "jaccard array contains values smaller than zero!"
 
 		# Store whether a prediction / gt got used in their data list
 		# Note: this is set to None if ignored, keep that in mind
