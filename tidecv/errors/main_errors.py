@@ -84,22 +84,11 @@ class ClassBoxError(Error):
 
         self.match = BestGTMatch(pred, gt) if not self.gt["used"] else None
 
+    # We can also decide to not fix these errors (since it's ambiguous to know which GT to assoc)
     def fix(self):
         if self.match is None:
             return None
         return self.gt["class"], self.match.fix()
-
-
-# class OtherError(Error):
-
-# 	description = "This detection didn't fall into any of the other error categories."
-# 	short_name  = "Both"
-
-# 	def __init__(self, pred:dict):
-# 		self.pred = pred
-
-# 	def fix(self):
-# 		return None
 
 
 class MissedError(Error):

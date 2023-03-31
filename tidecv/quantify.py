@@ -161,6 +161,8 @@ class TIDERun:
 
         self.errors = []
         self.error_dict = {_type: [] for _type in TIDE._error_types}
+        self.TP_pred_id_to_gt_id = {}
+
         self.ap_data = ClassedAPDataObject()
         self.qualifiers = {}
 
@@ -240,6 +242,7 @@ class TIDERun:
             pred["info"] = {"iou": pred["iou"], "used": pred["used"]}
             if pred["used"]:
                 pred["info"]["matched_with"] = pred["matched_with"]
+                self.TP_pred_id_to_gt_id[pred["_id"]] = pred["matched_with"]
 
             if pred["used"] is not None:
                 self.ap_data.push(
@@ -260,24 +263,6 @@ class TIDERun:
                     # There is no ground truth for this image, so just mark everything as BackgroundError
                     self._add_error(BackgroundError(pred))
                     continue
-
-                # Slower since getting that argmax only once, but over a bigger list of boxes, vs more argmaxes over smaller lists...
-
-                # idx = ex.gt_iou[pred_idx, :].argmax()
-                # iou_max = ex.gt_iou[pred_idx, idx]
-                # if iou_max < self.bg_thresh:
-                # 	self._add_error(BackgroundError(pred))
-                # elif iou_max < self.pos_thresh:
-                # 	if ex.gt[idx]['class'] == pred['class']:
-                # 		self._add_error(BoxError(pred, ex.gt[idx], ex))
-                # 	else:
-                # 		self._add_error(ClassBoxError(pred, ex.gt[idx], ex)) # add gt idx
-                # else:
-                # 	if ex.gt[idx]['class'] == pred['class']:
-                # 		suppressor = self.preds.annotations[ex.gt[idx]['matched_with']]
-                # 		self._add_error(DuplicateError(pred, ex.gt[idx], suppressor))
-                # 	else:
-                # 		self._add_error(ClassError(pred, ex.gt[idx], ex))
 
                 # Test for BoxError
                 idx = ex.gt_cls_iou[pred_idx, :].argmax()
