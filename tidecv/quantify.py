@@ -8,8 +8,6 @@ from . import plotting as P
 from pycocotools import mask as mask_utils
 from collections import defaultdict, OrderedDict
 import numpy as np
-from typing import Union
-import os, math
 
 
 class TIDEExample:
@@ -517,8 +515,6 @@ class TIDE:
 
         self.qualifiers = OrderedDict()
 
-        self.plotter = P.Plotter()
-
     def evaluate(
         self,
         gt: Data,
@@ -700,42 +696,6 @@ class TIDE:
             )
 
             print()
-
-    def plot(self, out_dir: str = None):
-        """
-        Plots a summary model for each run in this TIDE object.
-        Images will be outputted to out_dir, which will be created if it doesn't exist.
-        """
-
-        if out_dir is not None:
-            if not os.path.exists(out_dir):
-                os.makedirs(out_dir)
-
-        errors = self.get_all_errors()
-
-        max_main_error = max(
-            sum([list(x.values()) for x in errors["main"].values()], [])
-        )
-        max_spec_error = max(
-            sum([list(x.values()) for x in errors["special"].values()], [])
-        )
-        dap_granularity = 5  # The max will round up to the nearest unit of this
-
-        # Round the plotter's dAP range up to the nearest granularity units
-        if max_main_error > self.plotter.MAX_MAIN_DELTA_AP:
-            self.plotter.MAX_MAIN_DELTA_AP = (
-                math.ceil(max_main_error / dap_granularity) * dap_granularity
-            )
-        if max_spec_error > self.plotter.MAX_SPECIAL_DELTA_AP:
-            self.plotter.MAX_SPECIAL_DELTA_AP = (
-                math.ceil(max_spec_error / dap_granularity) * dap_granularity
-            )
-
-        # Do the plotting now
-        for run_name, run in self.runs.items():
-            self.plotter.make_summary_plot(
-                out_dir, errors, run_name, run.mode, hbar_names=True
-            )
 
     def get_main_errors(self):
         errors = {}
