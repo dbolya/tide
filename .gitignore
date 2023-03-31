@@ -9,3 +9,6 @@ examples/mask_rcnn_bbox.json
 examples/mask_rcnn_lvis.json
 minimal_example.py
 figs/
+
+venv/
+.DS_Store
